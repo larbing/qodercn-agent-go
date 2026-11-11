@@ -152,8 +152,11 @@ func repl(ctx context.Context, a *agent, resultCh chan *qoder.ResultMessage) {
 			continue
 		}
 		// One ResultMessage per turn lands on the channel; interrupting
-		// also produces a result, so this always returns.
-		<-resultCh
+		// also produces a result, so this always returns. A nil value means
+		// the stream died (consume printed the cause) — stop the REPL.
+		if <-resultCh == nil {
+			return
+		}
 		a.busy.Store(false)
 	}
 }
@@ -257,8 +260,10 @@ func slashCommand(ctx context.Context, client *qoder.Client, line string) (exit 
 	return false
 }
 
-// consume renders the live stream until the client disconnects.
+// consume renders the live stream until the client disconnects. It closes
+// resultCh on exit so the REPL never waits forever on a dead session.
 func consume(ctx context.Context, client *qoder.Client, resultCh chan<- *qoder.ResultMessage) {
+	defer close(resultCh)
 	stream, err := client.ReceiveMessages(ctx)
 	if err != nil {
 		printMu.Lock()
@@ -269,7 +274,12 @@ func consume(ctx context.Context, client *qoder.Client, resultCh chan<- *qoder.R
 	for {
 		msg, err := stream.Next(ctx)
 		if err != nil {
-			return // terminal error or EOF after Disconnect
+			if ctx.Err() == nil {
+				printMu.Lock()
+				fmt.Printf("%s会话已断开: %v%s\n", cRed, err, cReset)
+				printMu.Unlock()
+			}
+			return
 		}
 		switch m := msg.(type) {
 		case *qoder.StreamEvent:

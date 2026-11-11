@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -299,6 +300,36 @@ func (c *daemonConn) routeControlResponse(frame map[string]any, line []byte) err
 	return nil
 }
 
+// reverseRequestTypes are the connection-level control requests a daemon
+// may send to the SDK (reverse auth); everything else arriving as a
+// control_request belongs to a session's own inbound dispatch.
+var reverseRequestTypes = map[string]bool{
+	"daemon.auth.fetch_job_token":             true,
+	"daemon.auth.fetch_service_account_token": true,
+}
+
+// classifyReverseRequest mirrors the Python SDK's _classify_reverse_request:
+// "valid" marks a connection-level reverse-auth request (reserved type +
+// reserved daemon_sdk_ request id + no session_id); "contradictory" marks a
+// frame that reserves the daemon namespace but violates its routing rules;
+// everything else ("none") is a session-level request (can_use_tool,
+// hook_callback, ...) that must be forwarded to its session.
+func classifyReverseRequest(frame map[string]any) string {
+	request, _ := frame["request"].(map[string]any)
+	reqType, _ := request["type"].(string)
+	requestID, _ := frame["request_id"].(string)
+	_, hasSession := frame["session_id"]
+	reservedType := reverseRequestTypes[reqType]
+	reservedID := strings.HasPrefix(requestID, "daemon_sdk_")
+	if reservedType && reservedID && !hasSession {
+		return "valid"
+	}
+	if reservedType || reservedID {
+		return "contradictory"
+	}
+	return "none"
+}
+
 // routeReverse answers the daemon's connection-level control requests.
 // Only the two auth token callbacks exist today.
 func (c *daemonConn) routeReverse(frame map[string]any) error {
@@ -384,13 +415,27 @@ func (c *daemonConn) route(frame map[string]any, line []byte) error {
 	case "control_response":
 		return c.routeControlResponse(frame, line)
 	case "control_request":
-		return c.routeReverse(frame)
+		switch classifyReverseRequest(frame) {
+		case "valid":
+			return c.routeReverse(frame)
+		case "contradictory":
+			return newError(ErrKindMessageParse, "contradictory daemon reverse request routing markers")
+		}
+		// Session-level control requests (can_use_tool, hook_callback,
+		// mcp_message, ...) fall through to the session routing below,
+		// mirroring the Python daemon connection.
 	case "status_event":
 		return c.routeStatusEvent(frame)
 	}
+	return c.routeToSession(frame, line)
+}
+
+// routeToSession hands a frame carrying a session_id to its session's
+// inbound queue.
+func (c *daemonConn) routeToSession(frame map[string]any, line []byte) error {
 	sid, _ := frame["session_id"].(string)
 	if sid == "" {
-		return newError(ErrKindMessageParse, "daemon frame has no session_id and unrecognized type %q", t)
+		return newError(ErrKindMessageParse, "daemon frame has no session_id and unrecognized type %q", frame["type"])
 	}
 	c.mu.Lock()
 	s := c.sessions[sid]
