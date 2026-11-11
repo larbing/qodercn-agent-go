@@ -24,7 +24,7 @@ func main() {
 		// PermissionMode:   qoder.PermissionAcceptEdits,
 	}
 
-	stream, err := qoder.Query(ctx, "用一句话介绍你自己，并给出你的模型名称。", opts)
+	stream, err := qoder.Query(ctx, "使用react+vite+ts 写一个hello world页面", opts)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "query failed: %v\n", err)
 		os.Exit(1)

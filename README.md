@@ -425,6 +425,12 @@ cd examples/quickstart
 go run .
 ```
 
+[`examples/claude-code-agent`](examples/claude-code-agent/main.go) 是一个仿 Claude Code 的交互式终端 agent：多轮 REPL、流式打字机输出、每个工具调用在终端审批（y / n / a = 本会话总是允许）、内置 `/model` `/mode` `/usage` `/mcp` `/agents` 命令、Ctrl+C 中断当前轮（空闲时退出），并演示了 `CanUseTool` 审批回调与 `Hooks`（工具失败告警）的用法。
+
+```bash
+go run ./examples/claude-code-agent
+```
+
 ## 开发
 
 ```bash

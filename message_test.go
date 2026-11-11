@@ -76,8 +76,8 @@ func TestParseAssistantMessage(t *testing.T) {
 }
 
 func TestParseSystemInit(t *testing.T) {
-	line := []byte(`{"type":"system","subtype":"init","session_id":"s3",
-		"data":{"cwd":"/tmp","model":"glm-4.7"}}`)
+	// Real CLI shape: init fields live at the top level of the wire object.
+	line := []byte(`{"type":"system","subtype":"init","session_id":"s3","cwd":"/tmp","model":"glm-4.7"}`)
 	msg, err := parseMessage(line)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
@@ -86,7 +86,7 @@ func TestParseSystemInit(t *testing.T) {
 	if !ok || m.Subtype != "init" {
 		t.Fatalf("want init SystemMessage, got %T", msg)
 	}
-	if m.Data["cwd"] != "/tmp" {
+	if m.Data["session_id"] != "s3" || m.Data["cwd"] != "/tmp" || m.Data["model"] != "glm-4.7" {
 		t.Fatalf("data: %+v", m.Data)
 	}
 }

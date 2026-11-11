@@ -15,8 +15,11 @@ type QueryOptions struct {
 	// MessageUUID identifies the message for cancellation and replay
 	// dedup; do not reuse within one session.
 	MessageUUID string
-	// ShouldQuery=false enqueues the message without triggering a reply.
-	ShouldQuery bool
+	// ShouldQuery controls whether the message may start an assistant turn
+	// while the session is idle. Nil (the zero value of a *bool) means true,
+	// matching the Python SDK default; point it at a false value to enqueue
+	// the message without triggering a reply (e.g. context injection).
+	ShouldQuery *bool
 	// CustomContext overrides Options.CustomContext for this message.
 	CustomContext map[string]string
 }
@@ -126,7 +129,7 @@ func (c *Client) query(_ context.Context, prompt string, opts QueryOptions) erro
 	if opts.MessageUUID != "" {
 		out["uuid"] = opts.MessageUUID
 	}
-	if !opts.ShouldQuery {
+	if opts.ShouldQuery != nil && !*opts.ShouldQuery {
 		out["shouldQuery"] = false
 	}
 	ctxValue := opts.CustomContext

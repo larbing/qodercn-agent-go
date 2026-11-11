@@ -247,10 +247,12 @@ func parseMessage(line []byte) (Message, error) {
 
 	case "system":
 		m := &SystemMessage{Subtype: w.Subtype, baseMessage: base}
-		if len(w.Data) > 0 {
-			if err := json.Unmarshal(w.Data, &m.Data); err != nil {
-				return nil, jsonDecodeError(err, string(line))
-			}
+		// Python parity: Data carries the full raw payload — the CLI puts
+		// init fields (session_id, model, tools, ...) at the top level of
+		// the wire object, not under a nested "data" key.
+		var raw map[string]any
+		if err := json.Unmarshal(line, &raw); err == nil {
+			m.Data = raw
 		}
 		return m, nil
 
