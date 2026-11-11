@@ -1,0 +1,15 @@
+# Test binaries and coverage output
+*.test
+*.out
+coverage.html
+
+# Build artifacts
+*.exe
+
+# Editors / IDE
+.vscode/
+.idea/
+
+# OS artifacts
+.DS_Store
+Thumbs.db
