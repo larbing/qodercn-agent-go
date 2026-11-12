@@ -121,6 +121,11 @@ type ResultMessage struct {
 	PermissionDenials []map[string]any
 	IsError           bool
 	UUID              string
+
+	// Errors carries the CLI's human-readable error list and ErrorCode its
+	// machine code (e.g. 10404) when Subtype == "error_during_execution".
+	Errors    []string
+	ErrorCode int
 }
 
 func (*ResultMessage) messageType() string { return "result" }
@@ -168,6 +173,10 @@ type wireMessage struct {
 	Usage             map[string]any   `json:"usage,omitempty"`
 	ModelUsage        map[string]any   `json:"modelUsage,omitempty"`
 	PermissionDenials []map[string]any `json:"permission_denials,omitempty"`
+
+	// error detail fields (error_during_execution).
+	Errors    []string `json:"errors,omitempty"`
+	ErrorCode int      `json:"error_code,omitempty"`
 
 	// user-level fields.
 	ToolUseResult map[string]any `json:"tool_use_result,omitempty"`
@@ -279,6 +288,8 @@ func parseMessage(line []byte) (Message, error) {
 			m.Result = *w.Result
 		}
 		m.TotalCostUSD = w.TotalCostUSD
+		m.Errors = w.Errors
+		m.ErrorCode = w.ErrorCode
 		return m, nil
 
 	case "stream_event":

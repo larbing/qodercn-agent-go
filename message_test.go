@@ -109,6 +109,31 @@ func TestParseResultMessage(t *testing.T) {
 	if m.TotalCostUSD == nil || *m.TotalCostUSD != 0.01 {
 		t.Fatalf("cost: %+v", m.TotalCostUSD)
 	}
+	if m.Errors != nil || m.ErrorCode != 0 {
+		t.Fatalf("success must not carry error fields: %+v", m)
+	}
+}
+
+// error_during_execution results carry the CLI's error detail fields
+// (errors[] + error_code) that explain why the turn failed.
+func TestParseResultErrorDetail(t *testing.T) {
+	line := []byte(`{"type":"result","subtype":"error_during_execution","duration_ms":0,
+		"is_error":true,"num_turns":0,"total_cost_usd":0,
+		"errors":["The request could not be completed. Please try again."],"error_code":10404}`)
+	msg, err := parseMessage(line)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	m := msg.(*ResultMessage)
+	if !m.IsError || m.Subtype != "error_during_execution" || m.NumTurns != 0 {
+		t.Fatalf("fields: %+v", m)
+	}
+	if len(m.Errors) != 1 || m.Errors[0] != "The request could not be completed. Please try again." {
+		t.Fatalf("errors: %+v", m.Errors)
+	}
+	if m.ErrorCode != 10404 {
+		t.Fatalf("error_code: %d", m.ErrorCode)
+	}
 }
 
 func TestParseStreamEvent(t *testing.T) {

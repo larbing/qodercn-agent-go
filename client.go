@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"sync"
 )
 
@@ -184,7 +185,15 @@ func (c *Client) SetModel(ctx context.Context, model string) error {
 	if _, err := c.connectedSession(); err != nil {
 		return err
 	}
-	_, err := c.sess.sendControlRequestDefault(ctx, map[string]any{"subtype": "set_model", "model": model})
+	// The CLI accepts any set_model value (even invalid ones) and only
+	// fails later with an opaque per-query error. Resolve against the
+	// catalog and send the canonical value so a typo never poisons the
+	// session.
+	canonical, ok := resolveModelName(model, c.SupportedModels())
+	if !ok {
+		return fmt.Errorf("unknown model %q (not in the CLI model catalog)", model)
+	}
+	_, err := c.sess.sendControlRequestDefault(ctx, map[string]any{"subtype": "set_model", "model": canonical})
 	return err
 }
 
@@ -247,6 +256,43 @@ func (c *Client) SupportedAgents() []map[string]any {
 		}
 	}
 	return out
+}
+
+// SupportedModels lists the model catalog the CLI advertised in the
+// initialize response (entries carry value/modelId/displayName/isEnabled/...).
+// Empty before Connect or with CLIs that omit the catalog.
+func (c *Client) SupportedModels() []map[string]any {
+	info := c.ServerInfo()
+	models, _ := info["models"].([]any)
+	out := make([]map[string]any, 0, len(models))
+	for _, m := range models {
+		if mm, ok := m.(map[string]any); ok {
+			out = append(out, mm)
+		}
+	}
+	return out
+}
+
+// resolveModelName maps a user-supplied model name (value, modelId or
+// displayName, case-insensitive) to the canonical catalog value the CLI
+// expects. ok=false when the catalog exists and nothing matches; with no
+// catalog (older CLIs) the input passes through unchanged.
+func resolveModelName(model string, catalog []map[string]any) (string, bool) {
+	if len(catalog) == 0 {
+		return model, true
+	}
+	for _, entry := range catalog {
+		value, _ := entry["value"].(string)
+		for _, key := range []string{"value", "modelId", "displayName"} {
+			if v, _ := entry[key].(string); v != "" && strings.EqualFold(v, model) {
+				if value == "" {
+					return model, true
+				}
+				return value, true
+			}
+		}
+	}
+	return "", false
 }
 
 // MCPStatus returns the runtime MCP server status.

@@ -111,6 +111,7 @@ func startTransport(ctx context.Context, cliPath string, args, env []string, cwd
 
 // writeLine writes one NDJSON line, serialized across goroutines.
 func (t *transport) writeLine(b []byte) error {
+	debugWire("send", b)
 	if t.closed.Load() {
 		return cliConnectionError("transport closed")
 	}
@@ -128,9 +129,21 @@ func (t *transport) nextLine() ([]byte, bool) {
 		return nil, false
 	}
 	if t.scanner.Scan() {
-		return t.scanner.Bytes(), true
+		line := t.scanner.Bytes()
+		debugWire("recv", line)
+		return line, true
 	}
 	return nil, false
+}
+
+// debugWireEnabled is set by QODER_SDK_DEBUG=1; it dumps every raw wire
+// line to stderr for protocol debugging.
+var debugWireEnabled = sync.OnceValue(func() bool { return os.Getenv("QODER_SDK_DEBUG") != "" })
+
+func debugWire(dir string, line []byte) {
+	if debugWireEnabled() {
+		fmt.Fprintf(os.Stderr, "qoder: wire %s %s\n", dir, line)
+	}
 }
 
 // stop kills the subprocess (idempotent).
