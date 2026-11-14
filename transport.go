@@ -63,6 +63,7 @@ func (b *limitedBuffer) String() string {
 // exported via the environment and removed by the caller on close.
 func startTransport(ctx context.Context, cliPath string, args, env []string, cwd, authPayloadPath string) (*transport, error) {
 	cmd := exec.Command(cliPath, args...)
+	cmd.SysProcAttr = spawnAttr() // never flash a console window (windowsgui parents)
 	cmd.Env = env
 	if cwd != "" {
 		cmd.Dir = cwd
@@ -249,7 +250,9 @@ func checkVersion(cliPath string) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, cliPath, "-v").Output()
+	vcmd := exec.CommandContext(ctx, cliPath, "-v")
+	vcmd.SysProcAttr = spawnAttr() // same: no console flash on version probe
+	out, err := vcmd.Output()
 	if err != nil {
 		return // best effort only
 	}

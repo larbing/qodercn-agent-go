@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -99,6 +100,18 @@ func newSession(ctx context.Context, opts *Options) (*session, error) {
 		s, err := newDaemonSession(ctx, norm)
 		if err == nil {
 			return s, nil
+		}
+		if strings.Contains(err.Error(), "Could not verify Custom Provider access") {
+			// Restoring a BYOK custom model on resume runs a custom-provider
+			// access check that needs an interactive login session the SDK
+			// daemon never has — the failure is persistent, not transient
+			// (verified 2026-11-14 with PAT and CLI auth alike; the error's
+			// "Please retry" wording is misleading). Return the error without
+			// the direct-mode fallback: the legacy direct transport is gone on
+			// current CLIs (exit 42), so downgrading only adds misleading
+			// noise. Callers recover by re-opening with Options.Model set to
+			// an official catalog entry.
+			return nil, err
 		}
 		fmt.Fprintf(os.Stderr, "qoder: daemon transport unavailable (%v); falling back to direct mode\n", err)
 		return newDirectSession(ctx, norm)
