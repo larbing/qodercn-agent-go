@@ -190,6 +190,12 @@ func (c *Client) SetModel(ctx context.Context, model string) error {
 	// catalog and send the canonical value so a typo never poisons the
 	// session.
 	canonical, ok := resolveModelName(model, c.SupportedModels())
+	if !ok && strings.HasPrefix(model, "qoder-custom-") {
+		// BYOK custom models live in the CLI's customProviderRegistry and
+		// never appear in the init catalog; pass the reference through so a
+		// daemon with QODER_SDK_CUSTOM_BASE_URL_BYOK=1 can resolve it.
+		canonical, ok = model, true
+	}
 	if !ok {
 		return fmt.Errorf("unknown model %q (not in the CLI model catalog)", model)
 	}
